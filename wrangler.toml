@@ -1,0 +1,5 @@
+name = "agerng"
+compatibility_date = "2024-08-21"
+
+# This is required for Pages projects
+pages_build_output_dir = "./dist"
