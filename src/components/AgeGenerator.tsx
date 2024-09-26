@@ -58,6 +58,12 @@ export default function AgeGenerator() {
     setHistory(savedHistory);
   }, []);
 
+  const addToHistoryAndUpdate = (entry: HistoryEntry) => {
+    const updatedHistory = [entry, ...history];
+    setHistory(updatedHistory);
+    addToHistory(entry);
+  };
+
   const generateAoE4 = () => {
     const result = generateRandomAoE4Civ();
     setCurrentAoE4Civ(result);
@@ -69,23 +75,21 @@ export default function AgeGenerator() {
   };
 
   const finalizeAoE4 = () => {
-    const result = finalizeAoE4Selection(true);
+    const result = finalizeAoE4Selection(false);
     if (result) {
-      addToHistory(result);
-      setHistory(prevHistory => [result, ...prevHistory]);
+      addToHistoryAndUpdate(result);
       setCurrentAoE4Civ(null);
     }
   };
 
   const finalizeAoM = () => {
-    const result = finalizeAoMSelection(true);
+    const result = finalizeAoMSelection(false);
     if (result) {
       const finalResult = {
         ...result,
         civilization: result.civilization.split(' - ')[0]
       };
-      addToHistory(finalResult);
-      setHistory(prevHistory => [finalResult, ...prevHistory]);
+      addToHistoryAndUpdate(finalResult);
       setCurrentAoMCiv(null);
     }
   };
@@ -211,80 +215,87 @@ export default function AgeGenerator() {
   };
 
   const renderHistoryEntry = (entry: HistoryEntry) => {
-    if (!entry || typeof entry !== 'object') {
-      return null;
-    }
+  if (!entry || typeof entry !== 'object') {
+    return null;
+  }
 
-    const isAoE4 = entry.game === "AoE IV";
-    const title = entry.civilization;
-    
-    return (
-      <Dialog key={entry.civilization + (entry.majorGod || '')}>
-        <DialogTrigger asChild>
-          <Button variant="ghost" className="w-full text-left justify-between text-lg">
-            {title}
-            <span className="text-muted-foreground">{isAoE4 ? 'AoE IV' : 'AoM'}</span>
-          </Button>
-        </DialogTrigger>
-        <DialogContent className="sm:max-w-[425px]">
-          <DialogHeader>
-            <DialogTitle className="font-serif text-3xl">{title}</DialogTitle>
-            <DialogDescription asChild>
-              <div className="mt-4 text-lg">
-                {isAoE4 ? (
-                  <>
-                    <div className="mb-4">
-                      <a href={`https://aoe4world.com/explorer/civs/${entry.civSlug}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
-                        View civilization on AoE4 World
-                      </a>
-                    </div>
-                    {entry.ageUps && Object.entries(entry.ageUps).length > 0 ? (
-                      Object.entries(entry.ageUps).map(([age, choice]) => (
-                        <div key={age} className="mb-3 flex justify-between items-center">
-                          <span className="font-semibold font-serif">Age {age}:</span>
-                          <a 
-                            href={`https://aoe4world.com/explorer/civs/${entry.civSlug}/buildings/${choice.toLowerCase().replace(/\s+/g, '-')}`} 
-                            target="_blank" 
-                            rel="noopener noreferrer" 
-                            className="text-primary hover:underline"
-                          >
-                            {choice || 'Unknown'}
-                          </a>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="mb-3">No age-up choices available</div>
-                    )}
-                  </>
-                ) : (
-                  <>
-                    <div className="mb-3 flex justify-between items-center">
-                      <span className="font-semibold font-serif">Major God:</span>
-                      <span>{entry.majorGod || 'Unknown'}</span>
-                    </div>
-                    {entry.minorGods && Object.entries(entry.minorGods).length > 0 ? (
-                      Object.entries(entry.minorGods).map(([age, god]) => (
-                        <div key={age} className="mb-3 flex justify-between items-center">
-                          <span className="font-semibold font-serif">{age} Age:</span>
-                          <span>{god || 'Unknown'}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="mb-3">No minor gods available</div>
-                    )}
-                  </>
-                )}
-              </div>
-            </DialogDescription>
-          </DialogHeader>
-          <DialogClose asChild>
-            <Button className="mt-4 text-lg">Close</Button>
-          </DialogClose>
-        </DialogContent>
-      </Dialog>
-    );
+  const isAoE4 = entry.game === "AoE IV";
+  const title = isAoE4 ? entry.civilization : `${entry.civilization} - ${entry.majorGod}`;
+  const isAbbasid = entry.civilization === 'Abbasid Dynasty';
+  const isAyyubid = entry.civilization === 'Ayyubids';
+  
+  const getLinkForChoice = (age: string, choice: string) => {
+    if (isAbbasid) {
+      return `https://aoe4world.com/explorer/civs/abbasid/technologies/${choice.toLowerCase().split(' ')[0]}-wing`;
+    }
+    if (isAyyubid) {
+      return `https://aoe4world.com/explorer/civs/ayyubids/technologies/${age.toLowerCase()}-${choice.toLowerCase().replace(/\s+/g, '-')}`;
+    }
+    return `https://aoe4world.com/explorer/civs/${entry.civSlug}/buildings/${choice.toLowerCase().replace(/\s+/g, '-')}`;
   };
 
+  return (
+    <Dialog key={entry.civilization + (entry.majorGod || '')}>
+      <DialogTrigger asChild>
+        <Button variant="ghost" className="w-full text-left justify-between text-lg">
+          {title}
+          <span className="text-muted-foreground">{isAoE4 ? 'AoE IV' : 'AoM'}</span>
+        </Button>
+      </DialogTrigger>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle className="font-serif text-3xl">{title}</DialogTitle>
+          <DialogDescription asChild>
+            <div className="mt-4 text-lg">
+              {isAoE4 ? (
+                <>
+                  <div className="mb-4">
+                    <a href={`https://aoe4world.com/explorer/civs/${entry.civSlug}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                      View civilization on AoE4 World
+                    </a>
+                  </div>
+                  {entry.ageUps && Object.entries(entry.ageUps).length > 0 ? (
+                    Object.entries(entry.ageUps).map(([age, choice]) => (
+                      <div key={age} className="mb-3 flex justify-between items-center">
+                        <span className="font-semibold font-serif">Age {age}:</span>
+                        <a 
+                          href={getLinkForChoice(age, choice)}
+                          target="_blank" 
+                          rel="noopener noreferrer" 
+                          className="text-primary hover:underline"
+                        >
+                          {choice || 'Unknown'}
+                        </a>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="mb-3">No age-up choices available</div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {entry.minorGods && Object.entries(entry.minorGods).length > 0 ? (
+                    Object.entries(entry.minorGods).map(([age, god]) => (
+                      <div key={age} className="mb-3 flex justify-between items-center">
+                        <span className="font-semibold font-serif">{age} Age:</span>
+                        <span>{god || 'Unknown'}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="mb-3">No minor gods available</div>
+                  )}
+                </>
+              )}
+            </div>
+          </DialogDescription>
+        </DialogHeader>
+        <DialogClose asChild>
+          <Button className="mt-4 text-lg">Close</Button>
+        </DialogClose>
+      </DialogContent>
+    </Dialog>
+  );
+};
   return (
     <div className="container mx-auto p-4">
       <Tabs defaultValue="aoe4" className="w-full">
@@ -322,7 +333,7 @@ export default function AgeGenerator() {
                 <>
                   <Button onClick={finalizeAoE4} className="mr-2 text-lg">Finalize Selection</Button>
                   <Button onClick={handleRerollAoE4Landmarks} className="text-lg">
-{currentAoE4Civ.name === 'Abbasid Dynasty' || currentAoE4Civ.name === 'Ayyubids' ? 'Roll Wings' : 'Roll Landmarks'}
+                    {currentAoE4Civ.name === 'Abbasid Dynasty' || currentAoE4Civ.name === 'Ayyubids' ? 'Roll Wings' : 'Roll Landmarks'}
                   </Button>
                 </>
               ) : (
@@ -378,7 +389,7 @@ export default function AgeGenerator() {
         <CardContent>
           <ScrollArea className="h-[300px]">
             <div className="space-y-2">
-              {history.map((entry) => renderHistoryEntry(entry))}
+              {history.map((entry, index) => renderHistoryEntry(entry))}
             </div>
           </ScrollArea>
         </CardContent>
