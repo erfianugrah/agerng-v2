@@ -16,12 +16,42 @@ import {
 import { generateRandomAoE4Civ, finalizeAoE4Selection, updateAoE4Weight, rerollAoE4Landmarks } from '../scripts/aoe4';
 import { generateRandomAoMCiv, finalizeAoMSelection, updateAoMWeight, rerollAoMGods } from '../scripts/aom';
 import { addToHistory, loadHistory, exportJSON, exportCSV } from '../scripts/utils';
-import { aoe4AgeUpOptions, aomGods, AOE4_CIVILIZATIONS } from '../scripts/civgods';
+import { aoe4AgeUpOptions, aomGods, AOE4_CIVILIZATIONS, aoe4AyyubidBonuses } from '../scripts/civgods';
+
+interface AoE4Civ {
+  name: string;
+  weights: {
+    [key: string]: number[] | { wings: number[] };
+  };
+  ageUps?: {
+    [key: string]: string;
+  };
+}
+
+interface AoMCiv {
+  name: string;
+  majorGod: string;
+  weights: {
+    [key: string]: number[];
+  };
+  minorGods?: {
+    [key: string]: string;
+  };
+}
+
+interface HistoryEntry {
+  game: string;
+  civilization: string;
+  majorGod?: string;
+  ageUps?: { [key: string]: string };
+  minorGods?: { [key: string]: string };
+  civSlug?: string;
+}
 
 export default function AgeGenerator() {
-  const [history, setHistory] = useState([]);
-  const [currentAoE4Civ, setCurrentAoE4Civ] = useState(null);
-  const [currentAoMCiv, setCurrentAoMCiv] = useState(null);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
+  const [currentAoE4Civ, setCurrentAoE4Civ] = useState<AoE4Civ | null>(null);
+  const [currentAoMCiv, setCurrentAoMCiv] = useState<AoMCiv | null>(null);
 
   useEffect(() => {
     const savedHistory = loadHistory();
@@ -50,7 +80,6 @@ export default function AgeGenerator() {
   const finalizeAoM = () => {
     const result = finalizeAoMSelection(true);
     if (result) {
-      // Remove duplicate major god from the civilization name
       const finalResult = {
         ...result,
         civilization: result.civilization.split(' - ')[0]
@@ -61,30 +90,71 @@ export default function AgeGenerator() {
     }
   };
 
-  const handleAoE4WeightChange = (age, index, newValue) => {
-    const updatedWeights = updateAoE4Weight(age, index, newValue / 100);
-    setCurrentAoE4Civ(prev => ({ ...prev, weights: updatedWeights }));
+  const handleAoE4WeightChange = (age: string, index: number, newValue: number) => {
+    if (!currentAoE4Civ) return;
+
+    if (currentAoE4Civ.name === 'Abbasid Dynasty' || currentAoE4Civ.name === 'Ayyubids') {
+      const updatedWeights = updateAoE4Weight('wings', index, newValue / 100);
+      setCurrentAoE4Civ(prev => prev ? { ...prev, weights: updatedWeights } : null);
+    } else {
+      const updatedWeights = updateAoE4Weight(age, index, newValue / 100);
+      setCurrentAoE4Civ(prev => prev ? { ...prev, weights: updatedWeights } : null);
+    }
   };
 
-  const handleAoMWeightChange = (age, index, newValue) => {
+  const handleAoMWeightChange = (age: string, index: number, newValue: number) => {
+    if (!currentAoMCiv) return;
+
     const updatedWeights = updateAoMWeight(age, index, newValue / 100);
-    setCurrentAoMCiv(prev => ({ ...prev, weights: updatedWeights }));
+    setCurrentAoMCiv(prev => prev ? { ...prev, weights: updatedWeights } : null);
   };
 
   const handleRerollAoE4Landmarks = () => {
     const result = rerollAoE4Landmarks();
-    setCurrentAoE4Civ(result);
+    if (result) {
+      setCurrentAoE4Civ(prevState => prevState ? {
+        ...prevState,
+        ageUps: result.ageUps
+      } : null);
+    }
   };
 
   const handleRerollAoMGods = () => {
     const result = rerollAoMGods();
-    setCurrentAoMCiv(result);
+    if (result) {
+      setCurrentAoMCiv(prevState => prevState ? {
+        ...prevState,
+        minorGods: result.minorGods
+      } : null);
+    }
   };
 
   const renderAoE4Weights = () => {
     if (!currentAoE4Civ || !currentAoE4Civ.weights || !currentAoE4Civ.name) return null;
 
-    return Object.entries(currentAoE4Civ.weights).map(([age, options]) => {
+    if (currentAoE4Civ.name === 'Abbasid Dynasty' || currentAoE4Civ.name === 'Ayyubids') {
+      const wings = currentAoE4Civ.weights.wings as number[];
+      return (
+        <div className="mb-6">
+          <h4 className="text-2xl font-semibold mb-3 font-serif">Wings</h4>
+          {aoe4AgeUpOptions[currentAoE4Civ.name].map((wing, index) => (
+            <div key={index} className="flex items-center mb-3">
+              <span className="w-1/3 text-lg">{wing}</span>
+              <Slider
+                value={[wings[index] * 100]}
+                onValueChange={(newValue) => handleAoE4WeightChange('wings', index, newValue[0])}
+                max={100}
+                step={1}
+                className="flex-grow mx-4"
+              />
+              <span className="w-16 text-right text-lg">{(wings[index] * 100).toFixed(0)}%</span>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    return Object.entries(currentAoE4Civ.weights as { [key: string]: number[] }).map(([age, options]) => {
       if (!Array.isArray(options) || !aoe4AgeUpOptions[currentAoE4Civ.name] || !aoe4AgeUpOptions[currentAoE4Civ.name][age]) {
         return null;
       }
@@ -140,7 +210,7 @@ export default function AgeGenerator() {
     ));
   };
 
-  const renderHistoryEntry = (entry) => {
+  const renderHistoryEntry = (entry: HistoryEntry) => {
     if (!entry || typeof entry !== 'object') {
       return null;
     }
@@ -149,7 +219,7 @@ export default function AgeGenerator() {
     const title = entry.civilization;
     
     return (
-      <Dialog key={entry.id || Math.random().toString()}>
+      <Dialog key={entry.civilization + (entry.majorGod || '')}>
         <DialogTrigger asChild>
           <Button variant="ghost" className="w-full text-left justify-between text-lg">
             {title}
@@ -164,7 +234,7 @@ export default function AgeGenerator() {
                 {isAoE4 ? (
                   <>
                     <div className="mb-4">
-                      <a href={`https://aoe4world.com/explorer/civs/${AOE4_CIVILIZATIONS[entry.civilization]}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                      <a href={`https://aoe4world.com/explorer/civs/${entry.civSlug}`} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
                         View civilization on AoE4 World
                       </a>
                     </div>
@@ -173,7 +243,7 @@ export default function AgeGenerator() {
                         <div key={age} className="mb-3 flex justify-between items-center">
                           <span className="font-semibold font-serif">Age {age}:</span>
                           <a 
-                            href={`https://aoe4world.com/explorer/civs/${AOE4_CIVILIZATIONS[entry.civilization]}/buildings/${choice.toLowerCase().replace(/\s+/g, '-')}`} 
+                            href={`https://aoe4world.com/explorer/civs/${entry.civSlug}/buildings/${choice.toLowerCase().replace(/\s+/g, '-')}`} 
                             target="_blank" 
                             rel="noopener noreferrer" 
                             className="text-primary hover:underline"
@@ -188,6 +258,10 @@ export default function AgeGenerator() {
                   </>
                 ) : (
                   <>
+                    <div className="mb-3 flex justify-between items-center">
+                      <span className="font-semibold font-serif">Major God:</span>
+                      <span>{entry.majorGod || 'Unknown'}</span>
+                    </div>
                     {entry.minorGods && Object.entries(entry.minorGods).length > 0 ? (
                       Object.entries(entry.minorGods).map(([age, god]) => (
                         <div key={age} className="mb-3 flex justify-between items-center">
@@ -228,6 +302,16 @@ export default function AgeGenerator() {
                 <div>
                   <h3 className="text-2xl font-semibold mb-4 font-serif">Selected Civilization: {currentAoE4Civ.name}</h3>
                   {renderAoE4Weights()}
+                  {currentAoE4Civ.ageUps && (
+                    <div className="mt-4">
+                      <h4 className="text-2xl font-semibold mb-3 font-serif">Selected {currentAoE4Civ.name === 'Abbasid Dynasty' || currentAoE4Civ.name === 'Ayyubids' ? 'Wings' : 'Landmarks'}:</h4>
+                      {Object.entries(currentAoE4Civ.ageUps).map(([age, choice]) => (
+                        <div key={age} className="mb-2">
+                          <span className="font-semibold">Age {age}:</span> {choice}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div>Roll a random civilization for AoE IV.</div>
@@ -237,7 +321,9 @@ export default function AgeGenerator() {
               {currentAoE4Civ ? (
                 <>
                   <Button onClick={finalizeAoE4} className="mr-2 text-lg">Finalize Selection</Button>
-                  <Button onClick={handleRerollAoE4Landmarks} className="text-lg">Roll Landmarks</Button>
+                  <Button onClick={handleRerollAoE4Landmarks} className="text-lg">
+{currentAoE4Civ.name === 'Abbasid Dynasty' || currentAoE4Civ.name === 'Ayyubids' ? 'Roll Wings' : 'Roll Landmarks'}
+                  </Button>
                 </>
               ) : (
                 <Button onClick={generateAoE4} className="text-lg">Roll</Button>
@@ -256,6 +342,16 @@ export default function AgeGenerator() {
                   <h3 className="text-2xl font-semibold mb-4 font-serif">Selected Civilization: {currentAoMCiv.name}</h3>
                   <h4 className="text-xl font-medium mb-3 font-serif">Major God: {currentAoMCiv.majorGod}</h4>
                   {renderAoMWeights()}
+                  {currentAoMCiv.minorGods && (
+                    <div className="mt-4">
+                      <h4 className="text-2xl font-semibold mb-3 font-serif">Selected Minor Gods:</h4>
+                      {Object.entries(currentAoMCiv.minorGods).map(([age, god]) => (
+                        <div key={age} className="mb-2">
+                          <span className="font-semibold">{age} Age:</span> {god}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div>Roll a random major god for AoM.</div>
